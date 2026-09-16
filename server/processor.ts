@@ -96,6 +96,8 @@ export class TelemetryProcessor {
     let oilPressRate = 0;
     let vibRate = 0;
     let rpmVariation = 0;
+    let mapRate = 0;
+    let fuelRate = 0;
 
     const effectiveDt = Math.max(0.1, dtSeconds);
 
@@ -103,7 +105,9 @@ export class TelemetryProcessor {
       tempRate = (raw.engine_temperature - this.previousRecord.engine_temperature) / effectiveDt;
       oilPressRate = (raw.oil_pressure - this.previousRecord.oil_pressure) / effectiveDt;
       vibRate = (raw.vibration - this.previousRecord.vibration) / effectiveDt;
-      rpmVariation = Math.abs(raw.rpm - this.previousRecord.rpm) / effectiveDt;
+      rpmVariation = (raw.rpm - this.previousRecord.rpm) / effectiveDt;
+      mapRate = (raw.manifold_pressure - this.previousRecord.manifold_pressure) / effectiveDt;
+      fuelRate = (raw.fuel_flow - this.previousRecord.fuel_flow) / effectiveDt;
     }
 
     // Determine initial physical health status based on parameter safety bands
@@ -122,7 +126,7 @@ export class TelemetryProcessor {
       raw.vibration > 3.5 ||
       tempRate > 0.5 ||
       oilPressRate < -0.6 ||
-      rpmVariation > 150;
+      Math.abs(rpmVariation) > 150;
 
     if (isCritical) {
       healthStatus = 'CRITICAL';
@@ -143,10 +147,12 @@ export class TelemetryProcessor {
       throttle_position: raw.throttle_position,
       fault: raw.fault,
       health_status: healthStatus,
-      temperature_rate: round(tempRate, 3),
-      oil_pressure_rate: round(oilPressRate, 3),
-      vibration_rate: round(vibRate, 3),
-      rpm_variation: round(rpmVariation, 2),
+      temperature_rate: round(tempRate, 2),
+      oil_pressure_rate: round(oilPressRate, 2),
+      vibration_rate: round(vibRate, 2),
+      rpm_variation: round(rpmVariation, 1),
+      manifold_pressure_rate: round(mapRate, 2),
+      fuel_flow_rate: round(fuelRate, 2),
       anomaly_score: prediction ? round(prediction.anomaly_score, 3) : 0,
       prediction_confidence: prediction ? round(prediction.confidence, 3) : 0,
     };

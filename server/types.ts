@@ -39,6 +39,8 @@ export interface TelemetryRecord extends RawTelemetryInput {
   oil_pressure_rate: number;
   vibration_rate: number;
   rpm_variation: number;
+  manifold_pressure_rate?: number;
+  fuel_flow_rate?: number;
   anomaly_score: number;
   prediction_confidence: number;
 }

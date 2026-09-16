@@ -9,6 +9,23 @@
     <meta property="og:description" content="AI-Enabled Real-Time Digital Twin for Aero Piston Engine Health Monitoring, Fault Prediction & Mission Reliability (DRDO SIH26054)" />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      // Filter benign Vite dev HMR websocket disconnect warnings in container environment
+      window.addEventListener('unhandledrejection', function (event) {
+        var str = (event && event.reason) ? String(event.reason.message || event.reason) : '';
+        if (str.indexOf('WebSocket closed without opened') !== -1 || str.indexOf('failed to connect to websocket') !== -1) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+      });
+      window.addEventListener('error', function (event) {
+        var str = event ? String(event.message || '') : '';
+        if (str.indexOf('WebSocket closed without opened') !== -1 || str.indexOf('failed to connect to websocket') !== -1) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>

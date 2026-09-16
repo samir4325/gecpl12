@@ -118,14 +118,22 @@ const CircularGauge: React.FC<GaugeItemProps> = ({
             strokeLinecap="round"
             strokeDasharray="210"
             strokeDashoffset={210 - 210 * percent}
-            className="transition-all duration-300"
+            style={{
+              transition: 'stroke-dashoffset 650ms cubic-bezier(0.25, 1, 0.5, 1), stroke 400ms ease',
+            }}
           />
 
           {/* Center Needle Pivot */}
           <circle cx="60" cy="65" r="4" fill="#334155" />
 
           {/* Needle Indicator */}
-          <g transform={`rotate(${angle} 60 65)`} className="transition-transform duration-300">
+          <g
+            style={{
+              transform: `rotate(${angle}deg)`,
+              transformOrigin: '60px 65px',
+              transition: 'transform 650ms cubic-bezier(0.25, 1, 0.5, 1)',
+            }}
+          >
             <line x1="60" y1="65" x2="60" y2="28" stroke="#0f172a" strokeWidth="2.5" strokeLinecap="round" />
             <polygon points="60,24 57,32 63,32" fill="#0f172a" />
           </g>
@@ -274,6 +282,8 @@ export const GaugeCluster: React.FC<GaugeClusterProps> = ({ telemetry }) => {
           greenRange={[22, 28]}
           yellowRange={[28, 32]}
           redRange={[32, 35]}
+          rate={t.manifold_pressure_rate}
+          rateUnit="inHg/s"
           icon={<Gauge className="w-3.5 h-3.5 text-teal-600" />}
           decimals={1}
         />
@@ -289,6 +299,8 @@ export const GaugeCluster: React.FC<GaugeClusterProps> = ({ telemetry }) => {
           greenRange={[18, 28]}
           yellowRange={[28, 36]}
           redRange={[36, 45]}
+          rate={t.fuel_flow_rate}
+          rateUnit="L/h/s"
           icon={<Activity className="w-3.5 h-3.5 text-purple-600" />}
           decimals={1}
         />

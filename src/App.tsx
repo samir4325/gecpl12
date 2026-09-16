@@ -18,35 +18,22 @@ import { SimulationControls } from './components/SimulationControls';
 import { ModelEvaluationModal } from './components/ModelEvaluationModal';
 import { FirebaseModal } from './components/FirebaseModal';
 import { audioNotifier } from './utils/audio';
+import { telemetryService } from './services/telemetryService';
 
 export default function App() {
-  const [twinState, setTwinState] = useState<DigitalTwinState | null>(null);
-  const [history, setHistory] = useState<TelemetryRecord[]>([]);
-  const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [twinState, setTwinState] = useState<DigitalTwinState>(() => telemetryService.getState());
+  const [history, setHistory] = useState<TelemetryRecord[]>(() => telemetryService.getHistory());
+  const [alerts, setAlerts] = useState<Alert[]>(() => telemetryService.getAlerts());
+  const [isConnected, setIsConnected] = useState<boolean>(() => telemetryService.getIsConnected());
   const [isMuted, setIsMuted] = useState<boolean>(audioNotifier.getIsMuted());
   const [isModelModalOpen, setIsModelModalOpen] = useState<boolean>(false);
   const [isFirebaseModalOpen, setIsFirebaseModalOpen] = useState<boolean>(false);
   const [firebaseStatus, setFirebaseStatus] = useState<FirebaseSyncStatus | null>(null);
   const [modelMetrics, setModelMetrics] = useState<ModelMetrics | null>(null);
 
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastAlertIdRef = useRef<number>(0);
 
-  // Play audio alarm on new alert
-  const handleIncomingAlert = useCallback((alert: Alert) => {
-    if (alert.id > lastAlertIdRef.current) {
-      lastAlertIdRef.current = alert.id;
-      if (alert.severity === 'CRITICAL') {
-        audioNotifier.playCritical();
-      } else {
-        audioNotifier.playWarning();
-      }
-    }
-  }, []);
-
-  // Fetch initial state & ML metrics
+  // Fetch ML status and Firebase status
   const fetchFirebaseStatus = useCallback(async () => {
     try {
       const res = await fetch('/api/firebase/status');
@@ -59,221 +46,68 @@ export default function App() {
     }
   }, []);
 
-  const fetchInitialData = useCallback(async () => {
+  const fetchMlStatus = useCallback(async () => {
     try {
-      const [stateRes, historyRes, alertsRes, mlRes] = await Promise.all([
-        fetch('/api/digital-twin/state').then((r) => (r.ok ? r.json() : null)),
-        fetch('/api/telemetry/recent?limit=50').then((r) => (r.ok ? r.json() : null)),
-        fetch('/api/alerts/recent?limit=30').then((r) => (r.ok ? r.json() : null)),
-        fetch('/api/ml/status').then((r) => (r.ok ? r.json() : null)),
-      ]);
-
-      if (stateRes) setTwinState(stateRes);
-      if (historyRes && Array.isArray(historyRes)) {
-        // Reverse so chronological order (oldest to newest)
-        setHistory(historyRes.slice().reverse());
+      const res = await fetch('/api/ml/status');
+      if (res.ok) {
+        const data = await res.json();
+        setModelMetrics(data);
       }
-      if (alertsRes && Array.isArray(alertsRes)) {
-        setAlerts(alertsRes);
-        if (alertsRes.length > 0) {
-          lastAlertIdRef.current = Math.max(...alertsRes.map((a: Alert) => a.id));
-        }
-      }
-      if (mlRes) setModelMetrics(mlRes);
     } catch {
-      // Ignore network errors during initial load
+      // Ignore
     }
-    fetchFirebaseStatus();
-  }, [fetchFirebaseStatus]);
-
-  // Establish WebSocket connection with auto-reconnect
-  const connectWebSocket = useCallback(() => {
-    if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
-      return;
-    }
-
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/ws/telemetry`;
-
-    try {
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        setIsConnected(true);
-        if (reconnectTimeoutRef.current) {
-          clearTimeout(reconnectTimeoutRef.current);
-          reconnectTimeoutRef.current = null;
-        }
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const payload = JSON.parse(event.data);
-
-          if (payload.type === 'init' || payload.type === 'initial_state') {
-            if (payload.digital_twin) setTwinState(payload.digital_twin);
-            if (payload.recent_telemetry && Array.isArray(payload.recent_telemetry)) {
-              setHistory(payload.recent_telemetry.slice().reverse());
-            }
-            if (payload.recent_alerts && Array.isArray(payload.recent_alerts)) {
-              setAlerts(payload.recent_alerts);
-            }
-          } else if (payload.type === 'telemetry' || payload.type === 'telemetry_update') {
-            if (payload.digital_twin) {
-              setTwinState(payload.digital_twin);
-              const rec = payload.digital_twin.current_telemetry;
-              if (rec) {
-                setHistory((prev) => {
-                  const updated = [...prev, rec];
-                  return updated.length > 150 ? updated.slice(-150) : updated;
-                });
-              }
-            }
-            if (payload.telemetry) {
-              const rec: TelemetryRecord = payload.telemetry;
-              setHistory((prev) => {
-                const updated = [...prev, rec];
-                return updated.length > 150 ? updated.slice(-150) : updated;
-              });
-            }
-            if (payload.alerts && Array.isArray(payload.alerts) && payload.alerts.length > 0) {
-              payload.alerts.forEach((alt: Alert) => handleIncomingAlert(alt));
-              setAlerts((prev) => [...payload.alerts, ...prev].slice(0, 100));
-            }
-          } else if (payload.type === 'alert') {
-            handleIncomingAlert(payload.alert);
-            setAlerts((prev) => [payload.alert, ...prev].slice(0, 100));
-          }
-        } catch {
-          // Ignore invalid JSON payload
-        }
-      };
-
-      ws.onclose = () => {
-        setIsConnected(false);
-        wsRef.current = null;
-        // Schedule reconnect in 2 seconds
-        if (!reconnectTimeoutRef.current) {
-          reconnectTimeoutRef.current = setTimeout(() => {
-            connectWebSocket();
-          }, 2000);
-        }
-      };
-
-      ws.onerror = () => {
-        setIsConnected(false);
-        ws.close();
-      };
-    } catch {
-      setIsConnected(false);
-      if (!reconnectTimeoutRef.current) {
-        reconnectTimeoutRef.current = setTimeout(() => {
-          connectWebSocket();
-        }, 3000);
-      }
-    }
-  }, [handleIncomingAlert]);
+  }, []);
 
   useEffect(() => {
-    fetchInitialData();
-    connectWebSocket();
+    // Single source of truth telemetry subscription
+    const unsubscribe = telemetryService.subscribe((data) => {
+      setTwinState(data.twinState);
+      setHistory(data.history);
+      setAlerts(data.alerts);
+      setIsConnected(data.isConnected);
 
-    // Fallback polling every 2 seconds if WebSocket is disconnected
-    const pollInterval = setInterval(() => {
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-        fetch('/api/digital-twin/state')
-          .then((r) => r.json())
-          .then((data) => {
-            if (data && data.current_telemetry) {
-              setTwinState(data);
-              setHistory((prev) => {
-                const last = prev[prev.length - 1];
-                if (!last || last.id !== data.current_telemetry.id) {
-                  const updated = [...prev, data.current_telemetry];
-                  return updated.length > 150 ? updated.slice(-150) : updated;
-                }
-                return prev;
-              });
-            }
-          })
-          .catch(() => {});
+      // Check audio alerts
+      if (data.alerts.length > 0) {
+        const topAlert = data.alerts[0];
+        if (topAlert && topAlert.id > lastAlertIdRef.current) {
+          lastAlertIdRef.current = topAlert.id;
+          if (topAlert.severity === 'CRITICAL') {
+            audioNotifier.playCritical();
+          } else {
+            audioNotifier.playWarning();
+          }
+        }
       }
-    }, 2000);
+    });
+
+    fetchMlStatus();
+    fetchFirebaseStatus();
 
     const firebaseInterval = setInterval(() => {
       fetchFirebaseStatus();
     }, 3000);
 
     return () => {
-      clearInterval(pollInterval);
+      unsubscribe();
       clearInterval(firebaseInterval);
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-      if (wsRef.current) wsRef.current.close();
     };
-  }, [fetchInitialData, connectWebSocket, fetchFirebaseStatus]);
+  }, [fetchMlStatus, fetchFirebaseStatus]);
 
-  // Actions
+  // Actions delegate to central telemetry service
   const handleSetMode = async (mode: FaultType | 'AUTO') => {
-    try {
-      const res = await fetch('/api/simulation/mode', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode }),
-      });
-      const data = await res.json();
-      if (data.success && twinState) {
-        setTwinState({ ...twinState, simulation_mode: mode });
-      }
-    } catch {
-      // Error setting mode
-    }
+    await telemetryService.setMode(mode);
   };
 
   const handleTogglePlayPause = async () => {
-    const isRunning = twinState?.simulation_status === 'RUNNING';
-    const endpoint = isRunning ? '/api/simulation/pause' : '/api/simulation/resume';
-    try {
-      const res = await fetch(endpoint, { method: 'POST' });
-      const data = await res.json();
-      if (data.success && twinState) {
-        setTwinState({
-          ...twinState,
-          simulation_status: isRunning ? 'PAUSED' : 'RUNNING',
-        });
-      }
-    } catch {
-      // Error toggling simulation
-    }
+    await telemetryService.togglePlayPause();
   };
 
   const handleResetSimulation = async () => {
-    try {
-      const res = await fetch('/api/simulation/reset', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        fetchInitialData();
-      }
-    } catch {
-      // Error resetting simulation
-    }
+    await telemetryService.reset();
   };
 
   const handleSetInterval = async (ms: number) => {
-    try {
-      const res = await fetch('/api/simulation/interval', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ interval_ms: ms }),
-      });
-      const data = await res.json();
-      if (data.success && twinState) {
-        setTwinState({ ...twinState, interval_ms: ms });
-      }
-    } catch {
-      // Error setting interval
-    }
+    await telemetryService.setInterval(ms);
   };
 
   const handleRetrain = async (samplesPerClass: number) => {
@@ -291,27 +125,11 @@ export default function App() {
   };
 
   const handleAcknowledgeAlert = async (id: number) => {
-    try {
-      await fetch('/api/alerts/acknowledge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      });
-      setAlerts((prev) =>
-        prev.map((a) => (a.id === id ? { ...a, acknowledged: true } : a))
-      );
-    } catch {
-      // Error acknowledging alert
-    }
+    await telemetryService.acknowledgeAlert(id);
   };
 
   const handleClearAlerts = async () => {
-    try {
-      await fetch('/api/alerts/clear', { method: 'POST' });
-      setAlerts([]);
-    } catch {
-      setAlerts([]);
-    }
+    await telemetryService.clearAlerts();
   };
 
   const handleToggleMute = () => {

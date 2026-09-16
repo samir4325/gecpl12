@@ -75,7 +75,10 @@ async function startServer() {
   // 6. Integrate Vite middleware for Development or Static Files for Production
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: process.env.DISABLE_HMR === 'true' ? false : { server: httpServer },
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
