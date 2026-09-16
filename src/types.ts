@@ -90,3 +90,14 @@ export interface ModelMetrics {
   test_samples: number;
   last_trained_at: string | null;
 }
+
+export interface FirebaseSyncStatus {
+  connected: boolean;
+  database_url: string;
+  project_id: string;
+  last_sync_timestamp: string | null;
+  total_synced_records: number;
+  latency_ms: number;
+  last_error: string | null;
+  auto_sync_enabled: boolean;
+}

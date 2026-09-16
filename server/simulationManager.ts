@@ -5,6 +5,7 @@ import { EngineHealthClassifier } from './ml';
 import { AlertEngine } from './alerts';
 import { insertTelemetry, getLatestTelemetry } from './db';
 import { computeDigitalTwinState } from './digitalTwin';
+import { firebaseService } from './firebaseService';
 import {
   SimulationMode,
   SimulationStatus,
@@ -234,6 +235,24 @@ export class SimulationManager {
         digital_twin: twinState,
         alerts,
       });
+
+      // 7. Live sync to Firebase Realtime Database
+      firebaseService.syncState(twinState, alerts).catch(() => {});
+
+      // 8. Periodically poll for remote simulation commands from Firebase
+      if (stored.id % 4 === 0) {
+        firebaseService.pollRemoteCommand((cmd) => {
+          if (cmd.command === 'set_mode' && cmd.mode) {
+            this.setMode(cmd.mode);
+          } else if (cmd.command === 'start' || cmd.command === 'resume') {
+            this.start(cmd.interval_ms);
+          } else if (cmd.command === 'stop' || cmd.command === 'pause') {
+            this.stop();
+          } else if (cmd.command === 'reset') {
+            this.reset();
+          }
+        }).catch(() => {});
+      }
     } catch (err) {
       console.error('[SimulationManager] Error in simulation tick:', err);
     }

@@ -3,6 +3,7 @@ import {
   Alert,
   DigitalTwinState,
   FaultType,
+  FirebaseSyncStatus,
   ModelMetrics,
   SimulationStatus,
   TelemetryRecord,
@@ -15,6 +16,7 @@ import { AIDiagnosticsPanel } from './components/AIDiagnosticsPanel';
 import { AlertFeed } from './components/AlertFeed';
 import { SimulationControls } from './components/SimulationControls';
 import { ModelEvaluationModal } from './components/ModelEvaluationModal';
+import { FirebaseModal } from './components/FirebaseModal';
 import { audioNotifier } from './utils/audio';
 
 export default function App() {
@@ -24,6 +26,8 @@ export default function App() {
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(audioNotifier.getIsMuted());
   const [isModelModalOpen, setIsModelModalOpen] = useState<boolean>(false);
+  const [isFirebaseModalOpen, setIsFirebaseModalOpen] = useState<boolean>(false);
+  const [firebaseStatus, setFirebaseStatus] = useState<FirebaseSyncStatus | null>(null);
   const [modelMetrics, setModelMetrics] = useState<ModelMetrics | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -43,6 +47,18 @@ export default function App() {
   }, []);
 
   // Fetch initial state & ML metrics
+  const fetchFirebaseStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/firebase/status');
+      if (res.ok) {
+        const data = await res.json();
+        setFirebaseStatus(data);
+      }
+    } catch {
+      // Ignore network errors
+    }
+  }, []);
+
   const fetchInitialData = useCallback(async () => {
     try {
       const [stateRes, historyRes, alertsRes, mlRes] = await Promise.all([
@@ -67,7 +83,8 @@ export default function App() {
     } catch {
       // Ignore network errors during initial load
     }
-  }, []);
+    fetchFirebaseStatus();
+  }, [fetchFirebaseStatus]);
 
   // Establish WebSocket connection with auto-reconnect
   const connectWebSocket = useCallback(() => {
@@ -95,7 +112,7 @@ export default function App() {
         try {
           const payload = JSON.parse(event.data);
 
-          if (payload.type === 'init') {
+          if (payload.type === 'init' || payload.type === 'initial_state') {
             if (payload.digital_twin) setTwinState(payload.digital_twin);
             if (payload.recent_telemetry && Array.isArray(payload.recent_telemetry)) {
               setHistory(payload.recent_telemetry.slice().reverse());
@@ -103,15 +120,21 @@ export default function App() {
             if (payload.recent_alerts && Array.isArray(payload.recent_alerts)) {
               setAlerts(payload.recent_alerts);
             }
-          } else if (payload.type === 'telemetry') {
+          } else if (payload.type === 'telemetry' || payload.type === 'telemetry_update') {
             if (payload.digital_twin) {
               setTwinState(payload.digital_twin);
+              const rec = payload.digital_twin.current_telemetry;
+              if (rec) {
+                setHistory((prev) => {
+                  const updated = [...prev, rec];
+                  return updated.length > 150 ? updated.slice(-150) : updated;
+                });
+              }
             }
             if (payload.telemetry) {
               const rec: TelemetryRecord = payload.telemetry;
               setHistory((prev) => {
                 const updated = [...prev, rec];
-                // Keep max 150 points in memory
                 return updated.length > 150 ? updated.slice(-150) : updated;
               });
             }
@@ -179,12 +202,17 @@ export default function App() {
       }
     }, 2000);
 
+    const firebaseInterval = setInterval(() => {
+      fetchFirebaseStatus();
+    }, 3000);
+
     return () => {
       clearInterval(pollInterval);
+      clearInterval(firebaseInterval);
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (wsRef.current) wsRef.current.close();
     };
-  }, [fetchInitialData, connectWebSocket]);
+  }, [fetchInitialData, connectWebSocket, fetchFirebaseStatus]);
 
   // Actions
   const handleSetMode = async (mode: FaultType | 'AUTO') => {
@@ -302,12 +330,49 @@ export default function App() {
         twinState={twinState}
         isConnected={isConnected}
         isMuted={isMuted}
+        firebaseStatus={firebaseStatus}
         onToggleMute={handleToggleMute}
         onOpenModelModal={() => setIsModelModalOpen(true)}
+        onOpenFirebaseModal={() => setIsFirebaseModalOpen(true)}
       />
 
       {/* Main Content Dashboard */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
+        {/* Firebase RTDB Live Stream Status Bar */}
+        <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+            <div className="text-xs">
+              <span className="font-bold text-slate-800">Firebase RTDB Cloud Link:</span>{' '}
+              <span className="font-mono text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                {firebaseStatus?.database_url || 'https://gecpl12-57603-default-rtdb.firebaseio.com'}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 text-xs text-slate-500">
+            <div>
+              <span className="text-slate-400">Synced:</span>{' '}
+              <span className="font-mono font-bold text-slate-800">
+                {firebaseStatus?.total_synced_records ?? 0}
+              </span>{' '}
+              records
+            </div>
+            <div>
+              <span className="text-slate-400">Ping:</span>{' '}
+              <span className="font-mono font-bold text-emerald-600">
+                {firebaseStatus?.latency_ms ?? 0}ms
+              </span>
+            </div>
+            <button
+              onClick={() => setIsFirebaseModalOpen(true)}
+              className="text-xs font-semibold text-sky-600 hover:text-sky-800 hover:underline cursor-pointer"
+            >
+              View Cloud Data &rarr;
+            </button>
+          </div>
+        </div>
+
         {/* 2. Cockpit Flight Instruments Cluster */}
         <GaugeCluster telemetry={twinState?.current_telemetry || null} />
 
@@ -372,6 +437,14 @@ export default function App() {
         onClose={() => setIsModelModalOpen(false)}
         metrics={modelMetrics}
         onRetrain={handleRetrain}
+      />
+
+      {/* Firebase Realtime Database Cloud Sync Dialog */}
+      <FirebaseModal
+        isOpen={isFirebaseModalOpen}
+        onClose={() => setIsFirebaseModalOpen(false)}
+        status={firebaseStatus}
+        onRefreshStatus={fetchFirebaseStatus}
       />
     </div>
   );

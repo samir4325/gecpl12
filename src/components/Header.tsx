@@ -4,28 +4,33 @@ import {
   AlertTriangle,
   CheckCircle2,
   Cpu,
+  Database,
   Gauge,
   Volume2,
   VolumeX,
   Wifi,
   WifiOff,
 } from 'lucide-react';
-import { DigitalTwinState } from '../types';
+import { DigitalTwinState, FirebaseSyncStatus } from '../types';
 
 interface HeaderProps {
   twinState: DigitalTwinState | null;
   isConnected: boolean;
   isMuted: boolean;
+  firebaseStatus: FirebaseSyncStatus | null;
   onToggleMute: () => void;
   onOpenModelModal: () => void;
+  onOpenFirebaseModal: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   twinState,
   isConnected,
   isMuted,
+  firebaseStatus,
   onToggleMute,
   onOpenModelModal,
+  onOpenFirebaseModal,
 }) => {
   const healthStatus = twinState?.engine_health || 'HEALTHY';
   const healthScore = twinState?.health_score ?? 100;
@@ -167,6 +172,28 @@ export const Header: React.FC<HeaderProps> = ({
             title={isMuted ? 'Audio alarms muted (click to enable)' : 'Audio alarms active (click to mute)'}
           >
             {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+          </button>
+
+          {/* Firebase RTDB Live Cloud Sync button */}
+          <button
+            id="open-firebase-modal-btn"
+            onClick={onOpenFirebaseModal}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border transition-colors shadow-xs ${
+              firebaseStatus?.connected
+                ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                : 'bg-slate-50 text-slate-600 border-slate-300 hover:bg-slate-100'
+            }`}
+            title={`Firebase RTDB: ${
+              firebaseStatus?.connected
+                ? `Connected (${firebaseStatus.total_synced_records} synced)`
+                : 'Connecting to Firebase...'
+            }`}
+          >
+            <Database className="w-3.5 h-3.5 text-amber-600" />
+            <span className="font-semibold">Firebase RTDB</span>
+            {firebaseStatus?.connected && (
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            )}
           </button>
 
           {/* ML Model Metrics button */}
