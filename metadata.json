@@ -1,0 +1,6 @@
+{
+  "name": "AeroTwin - Aero Engine Digital Twin",
+  "description": "AI-Enabled Real-Time Digital Twin for Aero Piston Engine Health Monitoring, Fault Prediction & Mission Reliability (DRDO SIH26054)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
