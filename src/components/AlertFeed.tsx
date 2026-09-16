@@ -24,13 +24,14 @@ export const AlertFeed: React.FC<AlertFeedProps> = ({
 }) => {
   const [filterSeverity, setFilterSeverity] = useState<'ALL' | 'CRITICAL' | 'WARNING'>('ALL');
 
-  const filteredAlerts = alerts.filter((a) => {
+  const filteredAlerts = (alerts || []).filter((a) => {
+    if (!a) return false;
     if (filterSeverity === 'ALL') return true;
     return a.severity === filterSeverity;
   });
 
-  const criticalCount = alerts.filter((a) => a.severity === 'CRITICAL').length;
-  const warningCount = alerts.filter((a) => a.severity === 'WARNING').length;
+  const criticalCount = (alerts || []).filter((a) => a && a.severity === 'CRITICAL').length;
+  const warningCount = (alerts || []).filter((a) => a && a.severity === 'WARNING').length;
 
   return (
     <div
@@ -119,10 +120,12 @@ export const AlertFeed: React.FC<AlertFeedProps> = ({
         ) : (
           filteredAlerts.map((alert) => {
             const isCritical = alert.severity === 'CRITICAL';
-            const date = new Date(alert.timestamp);
+            const date = alert.timestamp ? new Date(alert.timestamp) : new Date();
             const timeStr = isNaN(date.getTime())
               ? 'Now'
               : date.toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' });
+
+            const alertTitle = String(alert.type || alert.parameter || 'SYSTEM_ALERT').replace(/_/g, ' ');
 
             return (
               <div
@@ -142,7 +145,7 @@ export const AlertFeed: React.FC<AlertFeedProps> = ({
                     )}
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-xs">{alert.type.replace(/_/g, ' ')}</span>
+                        <span className="font-bold text-xs">{alertTitle}</span>
                         <span
                           className={`font-mono text-[10px] px-1.5 py-0.2 rounded font-bold ${
                             isCritical
@@ -150,15 +153,15 @@ export const AlertFeed: React.FC<AlertFeedProps> = ({
                               : 'bg-amber-200 text-amber-800'
                           }`}
                         >
-                          {alert.severity}
+                          {alert.severity || 'WARNING'}
                         </span>
                       </div>
-                      <p className="text-xs mt-1 text-slate-700">{alert.message}</p>
+                      <p className="text-xs mt-1 text-slate-700">{alert.message || 'Anomaly detected'}</p>
                       <div className="flex items-center gap-3 mt-1.5 text-[10px] font-mono text-slate-500">
                         <span>Time: {timeStr}</span>
                         {alert.parameter && (
                           <span>
-                            {alert.parameter}: {alert.value} (Limit: {alert.threshold})
+                            {alert.parameter}: {alert.value} {alert.threshold !== undefined ? `(Limit: ${alert.threshold})` : ''}
                           </span>
                         )}
                       </div>

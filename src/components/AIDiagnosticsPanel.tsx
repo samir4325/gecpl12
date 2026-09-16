@@ -133,19 +133,19 @@ export const AIDiagnosticsPanel: React.FC<AIDiagnosticsPanelProps> = ({
 
           <div className="flex items-baseline justify-between">
             <h3 className="text-lg font-bold tracking-tight">
-              {predictedFault === 'HEALTHY'
+              {!predictedFault || predictedFault === 'HEALTHY'
                 ? 'NOMINAL FLIGHT ENVELOPE'
-                : predictedFault.replace(/_/g, ' ')}
+                : String(predictedFault).replace(/_/g, ' ')}
             </h3>
             <span className="text-xs font-medium">
-              Sim Ground Truth: {currentFault}
+              Sim Ground Truth: {currentFault || 'HEALTHY'}
             </span>
           </div>
 
           <p className="text-xs mt-1.5 opacity-85">
-            {predictedFault === 'HEALTHY'
+            {!predictedFault || predictedFault === 'HEALTHY'
               ? 'All thermal, lubrication, and vibration signatures are operating within calibrated DRDO SIH26054 safety margins.'
-              : `AI model detects early characteristic signatures of ${predictedFault.toLowerCase().replace(/_/g, ' ')}. Preventive mitigation recommended.`}
+              : `AI model detects early characteristic signatures of ${String(predictedFault).toLowerCase().replace(/_/g, ' ')}. Preventive mitigation recommended.`}
           </p>
         </div>
 

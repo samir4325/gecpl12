@@ -445,7 +445,7 @@ export const DigitalTwinEngineView: React.FC<DigitalTwinEngineViewProps> = ({
                 {selectedComponent === 'crankshaft_bearings' && <Gauge className="w-4 h-4 text-indigo-500" />}
                 {selectedComponent === 'valvetrain_ignition' && <Zap className="w-4 h-4 text-amber-500" />}
                 <span className="font-semibold text-sm text-slate-900 capitalize">
-                  {selectedComponent.replace('_', ' ')}
+                  {String(selectedComponent || '').replace(/_/g, ' ')}
                 </span>
               </div>
               <div className="flex items-center gap-1 text-xs font-semibold">

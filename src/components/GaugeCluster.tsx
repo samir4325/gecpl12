@@ -123,20 +123,29 @@ const CircularGauge: React.FC<GaugeItemProps> = ({
             }}
           />
 
-          {/* Center Needle Pivot */}
-          <circle cx="60" cy="65" r="4" fill="#334155" />
-
           {/* Needle Indicator */}
           <g
+            transform={`rotate(${angle} 60 65)`}
             style={{
-              transform: `rotate(${angle}deg)`,
               transformOrigin: '60px 65px',
+              transformBox: 'view-box',
+              transform: `rotate(${angle}deg)`,
               transition: 'transform 650ms cubic-bezier(0.25, 1, 0.5, 1)',
             }}
           >
-            <line x1="60" y1="65" x2="60" y2="28" stroke="#0f172a" strokeWidth="2.5" strokeLinecap="round" />
-            <polygon points="60,24 57,32 63,32" fill="#0f172a" />
+            {/* Counterbalance tail */}
+            <line x1="60" y1="65" x2="60" y2="72" stroke="#475569" strokeWidth="2" strokeLinecap="round" />
+            {/* Needle Shaft */}
+            <line x1="60" y1="65" x2="60" y2="26" stroke="#0f172a" strokeWidth="2.5" strokeLinecap="round" />
+            {/* Needle Arrowhead Pointer */}
+            <polygon points="60,21 56,30 64,30" fill="#0f172a" />
+            {/* Active Pointer Tip Glow / Indicator pip */}
+            <circle cx="60" cy="24" r="1.5" fill={arcColor} />
           </g>
+
+          {/* Center Needle Pivot Cap (rendered on top) */}
+          <circle cx="60" cy="65" r="5" fill="#1e293b" stroke="#ffffff" strokeWidth="1.2" />
+          <circle cx="60" cy="65" r="2" fill="#94a3b8" />
         </svg>
 
         {/* Readout Value */}

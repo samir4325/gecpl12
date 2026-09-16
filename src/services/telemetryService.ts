@@ -467,30 +467,68 @@ class TelemetryService {
 
       case 'HEALTHY':
       default: {
-        const throttleDelta = this.engineState.throttle - 70.0;
-        const targetRpm = 2400.0 + throttleDelta * 14.0 + gaussianNoise(0, 8.0);
-        const targetCht = 82.0 + throttleDelta * 0.18 + (this.engineState.rpm - 2400) * 0.004 + gaussianNoise(0, 0.1);
-        const targetOilPress = 50.0 + (this.engineState.rpm - 2400) * 0.003 - (this.engineState.oil_temp - 80) * 0.08 + gaussianNoise(0, 0.2);
-        const targetOilTemp = 80.0 + (this.engineState.engine_temp - 82) * 0.4 + gaussianNoise(0, 0.12);
-        const targetFuelFlow = 22.0 + throttleDelta * 0.28 + (this.engineState.rpm - 2400) * 0.004 + gaussianNoise(0, 0.12);
-        const targetMap = 25.0 + throttleDelta * 0.16 + gaussianNoise(0, 0.08);
-        const targetVibration = 1.80 + (this.engineState.rpm - 2400) * 0.0006 + gaussianNoise(0, 0.035);
+        // 1. RPM wandering with propeller governor and combustion torque dynamics
+        const targetRpm =
+          2400.0 +
+          Math.sin(this.faultStep * 0.35) * 65.0 +
+          Math.cos(this.faultStep * 0.18) * 35.0 +
+          (this.engineState.throttle - 70.0) * 12.0 +
+          gaussianNoise(0, 18.0);
+        this.engineState.rpm += (targetRpm - this.engineState.rpm) * 0.45 * dt;
+        this.engineState.rpm = clamp(this.engineState.rpm, 2280, 2520);
 
-        this.engineState.rpm += (targetRpm - this.engineState.rpm) * 0.32 * dt;
-        this.engineState.engine_temp += (targetCht - this.engineState.engine_temp) * 0.12 * dt;
-        this.engineState.oil_pressure += (targetOilPress - this.engineState.oil_pressure) * 0.25 * dt;
-        this.engineState.oil_temp += (targetOilTemp - this.engineState.oil_temp) * 0.15 * dt;
-        this.engineState.fuel_flow += (targetFuelFlow - this.engineState.fuel_flow) * 0.3 * dt;
-        this.engineState.manifold_pressure += (targetMap - this.engineState.manifold_pressure) * 0.3 * dt;
-        this.engineState.vibration += (targetVibration - this.engineState.vibration) * 0.28 * dt;
+        const rpmDeltaNorm = (this.engineState.rpm - 2400.0) / 200.0;
 
-        this.engineState.rpm = clamp(this.engineState.rpm, 2360, 2460);
-        this.engineState.engine_temp = clamp(this.engineState.engine_temp, 80.5, 84.5);
-        this.engineState.oil_pressure = clamp(this.engineState.oil_pressure, 48.0, 52.0);
-        this.engineState.oil_temp = clamp(this.engineState.oil_temp, 78.5, 82.0);
-        this.engineState.fuel_flow = clamp(this.engineState.fuel_flow, 21.0, 23.5);
-        this.engineState.manifold_pressure = clamp(this.engineState.manifold_pressure, 24.2, 25.8);
-        this.engineState.vibration = clamp(this.engineState.vibration, 1.70, 1.95);
+        // 2. Manifold Pressure responds with throttle and intake breathing
+        const targetMap =
+          25.0 +
+          rpmDeltaNorm * 1.1 +
+          Math.sin(this.faultStep * 0.28) * 0.8 +
+          gaussianNoise(0, 0.22);
+        this.engineState.manifold_pressure += (targetMap - this.engineState.manifold_pressure) * 0.4 * dt;
+        this.engineState.manifold_pressure = clamp(this.engineState.manifold_pressure, 23.3, 26.7);
+
+        // 3. Fuel flow responds to RPM and manifold pressure
+        const targetFuelFlow =
+          22.2 +
+          rpmDeltaNorm * 1.4 +
+          (this.engineState.manifold_pressure - 25.0) * 0.5 +
+          Math.cos(this.faultStep * 0.3) * 0.6 +
+          gaussianNoise(0, 0.25);
+        this.engineState.fuel_flow += (targetFuelFlow - this.engineState.fuel_flow) * 0.4 * dt;
+        this.engineState.fuel_flow = clamp(this.engineState.fuel_flow, 19.8, 24.6);
+
+        // 4. Vibration RMS with natural mechanical harmonics
+        const targetVibration =
+          1.80 +
+          Math.sin(this.faultStep * 0.48) * 0.22 +
+          Math.cos(this.faultStep * 0.24) * 0.15 +
+          gaussianNoise(0, 0.08);
+        this.engineState.vibration += (targetVibration - this.engineState.vibration) * 0.48 * dt;
+        this.engineState.vibration = clamp(this.engineState.vibration, 1.45, 2.18);
+
+        // 5. Oil Pressure pulses with engine speed and pump cycles
+        const targetOilPress =
+          50.5 +
+          rpmDeltaNorm * 1.8 +
+          Math.cos(this.faultStep * 0.25) * 1.4 +
+          gaussianNoise(0, 0.35);
+        this.engineState.oil_pressure += (targetOilPress - this.engineState.oil_pressure) * 0.38 * dt;
+        this.engineState.oil_pressure = clamp(this.engineState.oil_pressure, 47.4, 54.8);
+
+        // 6. Cylinder Head Temp with thermal inertia and power correlation
+        const targetCht =
+          82.0 +
+          rpmDeltaNorm * 1.6 +
+          Math.sin(this.faultStep * 0.14) * 1.5 +
+          gaussianNoise(0, 0.2);
+        this.engineState.engine_temp += (targetCht - this.engineState.engine_temp) * 0.22 * dt;
+        this.engineState.engine_temp = clamp(this.engineState.engine_temp, 78.8, 85.8);
+
+        // 7. Oil temperature tracks cylinder temperature
+        const targetOilTemp = 80.0 + (this.engineState.engine_temp - 82.0) * 0.45 + gaussianNoise(0, 0.15);
+        this.engineState.oil_temp += (targetOilTemp - this.engineState.oil_temp) * 0.18 * dt;
+        this.engineState.oil_temp = clamp(this.engineState.oil_temp, 77.0, 84.0);
         break;
       }
     }

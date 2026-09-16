@@ -11,20 +11,30 @@
     <meta name="twitter:card" content="summary_large_image" />
     <script>
       // Filter benign Vite dev HMR websocket disconnect warnings in container environment
-      window.addEventListener('unhandledrejection', function (event) {
-        var str = (event && event.reason) ? String(event.reason.message || event.reason) : '';
-        if (str.indexOf('WebSocket closed without opened') !== -1 || str.indexOf('failed to connect to websocket') !== -1) {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-        }
-      });
-      window.addEventListener('error', function (event) {
-        var str = event ? String(event.message || '') : '';
-        if (str.indexOf('WebSocket closed without opened') !== -1 || str.indexOf('failed to connect to websocket') !== -1) {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-        }
-      });
+      (function() {
+        var origConsoleError = console.error;
+        console.error = function() {
+          var msg = arguments[0] ? String(arguments[0]) : '';
+          if (msg.indexOf('[vite] failed to connect to websocket') !== -1 || msg.indexOf('WebSocket closed without opened') !== -1) {
+            return;
+          }
+          origConsoleError.apply(console, arguments);
+        };
+        window.addEventListener('unhandledrejection', function (event) {
+          var str = (event && event.reason) ? String(event.reason.message || event.reason) : '';
+          if (str.indexOf('WebSocket closed without opened') !== -1 || str.indexOf('failed to connect to websocket') !== -1) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        });
+        window.addEventListener('error', function (event) {
+          var str = event ? String(event.message || '') : '';
+          if (str.indexOf('WebSocket closed without opened') !== -1 || str.indexOf('failed to connect to websocket') !== -1) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        });
+      })();
     </script>
   </head>
   <body>
