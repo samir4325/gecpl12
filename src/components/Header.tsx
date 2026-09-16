@@ -6,6 +6,7 @@ import {
   Cpu,
   Database,
   Gauge,
+  ShieldAlert,
   Volume2,
   VolumeX,
   Wifi,
@@ -21,6 +22,7 @@ interface HeaderProps {
   onToggleMute: () => void;
   onOpenModelModal: () => void;
   onOpenFirebaseModal: () => void;
+  onOpenDecisionModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -31,6 +33,7 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleMute,
   onOpenModelModal,
   onOpenFirebaseModal,
+  onOpenDecisionModal,
 }) => {
   const healthStatus = twinState?.engine_health || 'HEALTHY';
   const healthScore = twinState?.health_score ?? 100;
@@ -195,6 +198,19 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             )}
           </button>
+
+          {/* Decision Support button */}
+          {onOpenDecisionModal && (
+            <button
+              id="open-decision-support-btn"
+              onClick={onOpenDecisionModal}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white transition-colors shadow-xs cursor-pointer"
+              title="Explainable Decision-Support & 8-Point Analysis"
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-indigo-200" />
+              <span>Decision Support</span>
+            </button>
+          )}
 
           {/* ML Model Metrics button */}
           <button

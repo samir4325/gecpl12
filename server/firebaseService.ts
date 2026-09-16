@@ -114,15 +114,16 @@ export class FirebaseService {
    */
   public async syncState(
     twinState: DigitalTwinState,
-    alerts: EngineAlert[] = []
+    alerts: EngineAlert[] = [],
+    force: boolean = false
   ): Promise<boolean> {
-    if (!this.autoSync || this.isSyncing) {
+    if ((!this.autoSync && !force) || this.isSyncing) {
       return false;
     }
 
-    // Throttle: sync at most once per 800ms
+    // Throttle: sync at most once per 800ms unless forced
     const now = Date.now();
-    if (now - this.lastSyncTimeMs < 800) {
+    if (!force && now - this.lastSyncTimeMs < 800) {
       return false;
     }
     this.lastSyncTimeMs = now;
@@ -226,6 +227,19 @@ export class FirebaseService {
     } catch {
       // Remote control check silent catch
     }
+  }
+
+  /**
+   * Fetch live snapshot from Firebase Realtime Database
+   */
+  public async getSnapshot(nodePath: string = 'digital_twin.json'): Promise<unknown> {
+    const cleanPath = nodePath.replace(/^\/+/, '');
+    const url = `${this.databaseUrl}/${cleanPath}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`Firebase HTTP error ${res.status}: ${res.statusText}`);
+    }
+    return await res.json();
   }
 }
 

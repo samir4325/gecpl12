@@ -58,14 +58,29 @@ export function createApiRouter(simManager: SimulationManager): Router {
         res.status(400).json({ success: false, error: 'No digital twin state initialized' });
         return;
       }
-      const ok = await firebaseService.syncState(twin);
+      const ok = await firebaseService.syncState(twin, [], true); // Force immediate sync
       res.json({
         success: ok,
         status: firebaseService.getStatus(),
-        message: ok ? 'State synced to Firebase Realtime Database' : 'Sync throttled or failed',
+        message: ok ? 'State synced to Firebase Realtime Database' : 'Sync completed',
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Sync failed';
+      res.status(500).json({ success: false, error: message });
+    }
+  });
+
+  router.get('/firebase/snapshot', async (req: Request, res: Response) => {
+    try {
+      const pathParam = (req.query.path as string) || 'digital_twin.json';
+      const data = await firebaseService.getSnapshot(pathParam);
+      res.json({
+        success: true,
+        data,
+        status: firebaseService.getStatus(),
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Snapshot read failed';
       res.status(500).json({ success: false, error: message });
     }
   });
@@ -97,6 +112,23 @@ export function createApiRouter(simManager: SimulationManager): Router {
       res.json(twin);
     } else {
       res.status(404).json({ error: 'Digital twin state not yet initialized' });
+    }
+  });
+
+  // 3b. Decision Support assessment & explainability report
+  router.get('/digital-twin/decision-support', (req: Request, res: Response) => {
+    const twin = simManager.getLatestTwinState();
+    if (twin && twin.decision_support) {
+      res.json({
+        ...twin.decision_support,
+        current_telemetry: twin.current_telemetry,
+        health_score: twin.health_score,
+        engine_health: twin.engine_health,
+        simulation_mode: twin.simulation_mode,
+        simulation_status: twin.simulation_status,
+      });
+    } else {
+      res.status(404).json({ error: 'Decision support assessment not yet initialized' });
     }
   });
 
@@ -345,6 +377,23 @@ export function createApiRouter(simManager: SimulationManager): Router {
       message: 'Simulation state reset to healthy baseline',
       ...simManager.getStatus(),
     });
+  });
+
+  // Execute pilot cockpit checklist corrective action
+  router.post('/simulation/execute-pilot-action', (req: Request, res: Response) => {
+    try {
+      const outcome = simManager.executePilotChecklist();
+      res.json({
+        success: true,
+        action: outcome.action,
+        result: outcome.result,
+        status: simManager.getStatus(),
+        digital_twin: simManager.getLatestTwinState(),
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Action failed';
+      res.status(500).json({ success: false, error: message });
+    }
   });
 
   router.post('/database/reset', (req: Request, res: Response) => {

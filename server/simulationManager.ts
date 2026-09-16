@@ -159,6 +159,13 @@ export class SimulationManager {
     this.tick();
   }
 
+  public executePilotChecklist(): { action: string; result: string } {
+    const outcome = this.simulator.applyPilotCorrection();
+    this.mode = 'HEALTHY';
+    this.tick();
+    return outcome;
+  }
+
   public addClient(ws: WebSocket): void {
     this.clients.add(ws);
     // Send immediate initial state

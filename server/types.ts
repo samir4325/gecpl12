@@ -8,6 +8,84 @@ export type FaultType =
 export type HealthStatus = 'HEALTHY' | 'WARNING' | 'CRITICAL';
 export type RiskLevel = 'NORMAL' | 'ELEVATED' | 'HIGH' | 'CRITICAL';
 
+export type PredictionState =
+  | 'NORMAL'
+  | 'WATCH'
+  | 'EARLY_WARNING'
+  | 'HIGH_RISK'
+  | 'CRITICAL';
+
+export type TrendDirection = 'STABLE' | 'DETERIORATING' | 'IMPROVING' | 'RECOVERING';
+
+export type RiskHorizon =
+  | 'STABLE'
+  | 'RISK_INCREASING'
+  | 'NEAR_TERM_CONCERN'
+  | 'RAPIDLY_DETERIORATING';
+
+export type ConfidenceType = 'ML_MODEL_OUTPUT' | 'RULE_BASED_ESTIMATE';
+
+export interface DecisionSupportTimelineEvent {
+  timestamp: string;
+  state: PredictionState;
+  fault: string;
+  note: string;
+  lead_time_seconds?: number;
+}
+
+export interface MultiParameterEvidence {
+  parameter: string;
+  current_value: number;
+  unit: string;
+  rate: number;
+  moving_avg: number;
+  std_dev: number;
+  baseline_normal: string;
+  observation: string;
+}
+
+export interface PilotChecklistStep {
+  step: number;
+  item: string;
+  action: string;
+  critical?: boolean;
+}
+
+export interface DecisionSupport {
+  prediction_state: PredictionState;
+  probable_condition: string;
+  target_fault?: FaultType | 'UNKNOWN_ANOMALY';
+  model_status: string;
+  confidence: number;
+  confidence_type: ConfidenceType;
+  severity: 'NOMINAL' | 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
+  trend: TrendDirection;
+  risk_horizon: RiskHorizon;
+  quick_solution?: string;
+  pilot_checklist?: PilotChecklistStep[];
+  why_reasons: string[];
+  if_unaddressed: string;
+  response_guidance: string;
+  procedure_reference: string;
+  procedure_status: 'REFERENCE_NOT_CONFIGURED' | 'CONFIGURED';
+  procedure_source: string;
+  monitored_next: string;
+  is_unknown_anomaly?: boolean;
+  lead_time_seconds?: number;
+  evidence: MultiParameterEvidence[];
+  timeline: DecisionSupportTimelineEvent[];
+  eight_point_assessment: {
+    what_is_happening: string;
+    what_is_likely_causing_it: string;
+    why_does_system_think_this: string[];
+    how_serious_is_it: string;
+    is_trend_getting_worse: string;
+    what_could_happen_if_continues: string;
+    what_approved_procedure_should_be_referenced: string;
+    what_should_system_monitor_next: string;
+  };
+}
+
 export type SimulationMode =
   | 'AUTO'
   | 'HEALTHY'
@@ -86,4 +164,5 @@ export interface DigitalTwinState {
   simulation_mode: SimulationMode;
   simulation_status: SimulationStatus;
   interval_ms: number;
+  decision_support?: DecisionSupport;
 }

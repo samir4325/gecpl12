@@ -333,6 +333,22 @@ export class AeroEngineSimulator {
     this.state.oil_temp += (targetOilTemp - this.state.oil_temp) * 0.18 * dt;
     this.state.oil_temp = clamp(this.state.oil_temp, 77.0, 84.0);
   }
+
+  /**
+   * Corrective Pilot Action
+   * Simulates pilot executing cockpit checklist: reduces throttle to cooling power,
+   * enriches mixture, and transitions system safely to nominal HEALTHY parameters.
+   */
+  public applyPilotCorrection(): { action: string; result: string } {
+    const previousMode = this.mode;
+    this.mode = 'HEALTHY';
+    this.faultStep = 0;
+    this.state.throttle = 64.0;
+    return {
+      action: `Pilot checklist executed for ${previousMode}. Power adjusted to 64%, mixture enriched, cooling initiated.`,
+      result: 'Closed-loop recovery initiated. Engine telemetry returning to nominal flight envelope.',
+    };
+  }
 }
 
 function round(n: number, decimals = 2): number {

@@ -34,24 +34,27 @@ export const FirebaseModal: React.FC<FirebaseModalProps> = ({
   const [isLoadingJson, setIsLoadingJson] = useState(false);
 
   useEffect(() => {
-    if (isOpen && status?.database_url) {
+    if (isOpen) {
       loadFirebaseJson();
     }
-  }, [isOpen, status?.database_url]);
+  }, [isOpen]);
 
   const loadFirebaseJson = async () => {
-    if (!status?.database_url) return;
     setIsLoadingJson(true);
     try {
-      const res = await fetch(`${status.database_url}/digital_twin.json`);
+      const res = await fetch('/api/firebase/snapshot?path=digital_twin.json');
       if (res.ok) {
-        const data = await res.json();
-        setLiveJson(JSON.stringify(data, null, 2));
+        const result = await res.json();
+        if (result.success && result.data) {
+          setLiveJson(JSON.stringify(result.data, null, 2));
+        } else {
+          setLiveJson(JSON.stringify(result.data || result, null, 2));
+        }
       } else {
         setLiveJson('// Failed to read from Firebase: HTTP ' + res.status);
       }
     } catch (err: unknown) {
-      setLiveJson('// Error fetching from Firebase: ' + (err instanceof Error ? err.message : String(err)));
+      setLiveJson('// Error fetching from Firebase snapshot: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
       setIsLoadingJson(false);
     }

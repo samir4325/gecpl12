@@ -7,6 +7,7 @@ import {
   Flame,
   Gauge,
   HelpCircle,
+  ShieldAlert,
   Sparkles,
   TrendingUp,
   Zap,
@@ -16,11 +17,13 @@ import { DigitalTwinState, FaultType } from '../types';
 interface AIDiagnosticsPanelProps {
   twinState: DigitalTwinState | null;
   onOpenModelModal: () => void;
+  onOpenDecisionModal?: () => void;
 }
 
 export const AIDiagnosticsPanel: React.FC<AIDiagnosticsPanelProps> = ({
   twinState,
   onOpenModelModal,
+  onOpenDecisionModal,
 }) => {
   const telemetry = twinState?.current_telemetry;
   const predictedFault = twinState?.predicted_fault || 'HEALTHY';
@@ -235,11 +238,25 @@ export const AIDiagnosticsPanel: React.FC<AIDiagnosticsPanelProps> = ({
       </div>
 
       {/* Early Warning Prognosis Footnote */}
-      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-        <span className="flex items-center gap-1.5">
-          <AlertTriangle className="w-3.5 h-3.5 text-sky-600" />
-          Rate-derivative early lead time: ~5-15s before threshold breach
-        </span>
+      <div className="mt-4 pt-3 border-t border-slate-100 flex flex-col gap-2 text-xs text-slate-500">
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 text-sky-600" />
+            Rate-derivative early lead time: ~5-15s before breach
+          </span>
+          <span className="font-mono text-[11px] text-slate-400">SIH26054 RF</span>
+        </div>
+
+        {onOpenDecisionModal && (
+          <button
+            onClick={onOpenDecisionModal}
+            className="w-full mt-1 py-2 px-3 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <ShieldAlert className="w-4 h-4 text-indigo-600" />
+            <span>Open Explainable Decision Support (8-Point Inquiry)</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
     </div>
   );

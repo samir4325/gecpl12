@@ -13,6 +13,9 @@ import { DigitalTwinEngineView } from './components/DigitalTwinEngineView';
 import { GaugeCluster } from './components/GaugeCluster';
 import { TelemetryCharts } from './components/TelemetryCharts';
 import { AIDiagnosticsPanel } from './components/AIDiagnosticsPanel';
+import { DecisionSupportPanel } from './components/DecisionSupportPanel';
+import { EarlyWarningBanner } from './components/EarlyWarningBanner';
+import { ExplainabilityModal } from './components/ExplainabilityModal';
 import { AlertFeed } from './components/AlertFeed';
 import { SimulationControls } from './components/SimulationControls';
 import { ModelEvaluationModal } from './components/ModelEvaluationModal';
@@ -28,10 +31,13 @@ export default function App() {
   const [isMuted, setIsMuted] = useState<boolean>(audioNotifier.getIsMuted());
   const [isModelModalOpen, setIsModelModalOpen] = useState<boolean>(false);
   const [isFirebaseModalOpen, setIsFirebaseModalOpen] = useState<boolean>(false);
+  const [isExplainabilityModalOpen, setIsExplainabilityModalOpen] = useState<boolean>(false);
+  const [rightPanelView, setRightPanelView] = useState<'DECISION_SUPPORT' | 'AI_DIAGNOSTICS'>('DECISION_SUPPORT');
   const [firebaseStatus, setFirebaseStatus] = useState<FirebaseSyncStatus | null>(null);
   const [modelMetrics, setModelMetrics] = useState<ModelMetrics | null>(null);
 
   const lastAlertIdRef = useRef<number>(0);
+  const lastPredictionStateRef = useRef<string>('NORMAL');
 
   // Fetch ML status and Firebase status
   const fetchFirebaseStatus = useCallback(async () => {
@@ -76,6 +82,21 @@ export default function App() {
           } else {
             audioNotifier.playWarning();
           }
+        }
+      }
+
+      // Voice callout on prediction change
+      const ds = data.twinState?.decision_support;
+      if (ds && ds.prediction_state !== lastPredictionStateRef.current) {
+        const prev = lastPredictionStateRef.current;
+        lastPredictionStateRef.current = ds.prediction_state;
+
+        if (ds.prediction_state === 'CRITICAL') {
+          audioNotifier.speakCallout(`Warning: ${ds.probable_condition}`);
+        } else if (ds.prediction_state === 'EARLY_WARNING' || ds.prediction_state === 'HIGH_RISK') {
+          audioNotifier.speakCallout(`Caution: ${ds.probable_condition}`);
+        } else if (ds.prediction_state === 'NORMAL' && prev !== 'NORMAL') {
+          audioNotifier.speakCallout('All engine parameters returned to nominal flight envelope.');
         }
       }
     });
@@ -152,6 +173,7 @@ export default function App() {
         onToggleMute={handleToggleMute}
         onOpenModelModal={() => setIsModelModalOpen(true)}
         onOpenFirebaseModal={() => setIsFirebaseModalOpen(true)}
+        onOpenDecisionModal={() => setIsExplainabilityModalOpen(true)}
       />
 
       {/* Main Content Dashboard */}
@@ -183,6 +205,20 @@ export default function App() {
               </span>
             </div>
             <button
+              onClick={async () => {
+                try {
+                  await fetch('/api/firebase/sync', { method: 'POST' });
+                  await fetchFirebaseStatus();
+                } catch {
+                  // ignore
+                }
+              }}
+              className="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition-colors cursor-pointer"
+              title="Force immediate sync to Firebase"
+            >
+              Sync Now
+            </button>
+            <button
               onClick={() => setIsFirebaseModalOpen(true)}
               className="text-xs font-semibold text-sky-600 hover:text-sky-800 hover:underline cursor-pointer"
             >
@@ -191,22 +227,63 @@ export default function App() {
           </div>
         </div>
 
+        {/* Real-time Early-Warning & Decision-Support Banner */}
+        <EarlyWarningBanner
+          twinState={twinState}
+          history={history}
+          onOpenExplainabilityModal={() => setIsExplainabilityModalOpen(true)}
+          onSelectFaultMode={handleSetMode}
+        />
+
         {/* 2. Cockpit Flight Instruments Cluster */}
         <GaugeCluster telemetry={twinState?.current_telemetry || null} />
 
-        {/* 3. Digital Twin Schematic & AI Diagnostics Grid */}
+        {/* 3. Digital Twin Schematic & AI Diagnostics / Decision Support Grid */}
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
           {/* Engine Cutaway Digital Twin (8 cols on XL) */}
           <div className="xl:col-span-8">
             <DigitalTwinEngineView twinState={twinState} />
           </div>
 
-          {/* AI Health Diagnostics & Prognostics (4 cols on XL) */}
-          <div className="xl:col-span-4">
-            <AIDiagnosticsPanel
-              twinState={twinState}
-              onOpenModelModal={() => setIsModelModalOpen(true)}
-            />
+          {/* Decision Support & AI Diagnostics (4 cols on XL) */}
+          <div className="xl:col-span-4 space-y-3">
+            {/* View Tab Switcher */}
+            <div className="flex p-1 bg-slate-200/80 rounded-xl text-xs font-semibold">
+              <button
+                onClick={() => setRightPanelView('DECISION_SUPPORT')}
+                className={`flex-1 py-1.5 px-2 rounded-lg transition-all cursor-pointer ${
+                  rightPanelView === 'DECISION_SUPPORT'
+                    ? 'bg-white text-indigo-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Decision Support
+              </button>
+              <button
+                onClick={() => setRightPanelView('AI_DIAGNOSTICS')}
+                className={`flex-1 py-1.5 px-2 rounded-lg transition-all cursor-pointer ${
+                  rightPanelView === 'AI_DIAGNOSTICS'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                AI Model &amp; Probs
+              </button>
+            </div>
+
+            {rightPanelView === 'DECISION_SUPPORT' ? (
+              <DecisionSupportPanel
+                twinState={twinState}
+                history={history}
+                onOpenExplainabilityModal={() => setIsExplainabilityModalOpen(true)}
+              />
+            ) : (
+              <AIDiagnosticsPanel
+                twinState={twinState}
+                onOpenModelModal={() => setIsModelModalOpen(true)}
+                onOpenDecisionModal={() => setIsExplainabilityModalOpen(true)}
+              />
+            )}
           </div>
         </div>
 
@@ -255,6 +332,14 @@ export default function App() {
         onClose={() => setIsModelModalOpen(false)}
         metrics={modelMetrics}
         onRetrain={handleRetrain}
+      />
+
+      {/* Explainability & 8-Point Decision Support Modal */}
+      <ExplainabilityModal
+        isOpen={isExplainabilityModalOpen}
+        onClose={() => setIsExplainabilityModalOpen(false)}
+        twinState={twinState}
+        history={history}
       />
 
       {/* Firebase Realtime Database Cloud Sync Dialog */}

@@ -9,6 +9,7 @@ import {
   ComponentHealth,
 } from './types';
 import { PredictionResult } from './ml';
+import { decisionSupportEngine } from './decisionSupport';
 
 export function computeDigitalTwinState(
   telemetry: TelemetryRecord,
@@ -150,6 +151,12 @@ export function computeDigitalTwinState(
     detail: `${telemetry.rpm.toFixed(0)} RPM (Δ ${telemetry.rpm_variation.toFixed(0)} RPM/s)`,
   };
 
+  const decisionSupport = decisionSupportEngine.analyze(
+    telemetry,
+    prediction,
+    Math.max(0.1, intervalMs / 1000)
+  );
+
   return {
     timestamp: telemetry.timestamp,
     current_telemetry: telemetry,
@@ -174,5 +181,6 @@ export function computeDigitalTwinState(
     simulation_mode: simulationMode,
     simulation_status: simulationStatus,
     interval_ms: intervalMs,
+    decision_support: decisionSupport,
   };
 }

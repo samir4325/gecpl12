@@ -88,6 +88,23 @@ class AudioNotifier {
       // Ignore audio error
     }
   }
+
+  /**
+   * Cockpit synthetic voice annunciator (e.g., "Caution: Engine Overheating", "Warning: Low Oil Pressure")
+   */
+  public speakCallout(phrase: string) {
+    if (this.isMuted || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(phrase);
+      utterance.rate = 1.05;
+      utterance.pitch = 0.95;
+      utterance.volume = 0.85;
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      // speech synthesis unavailable
+    }
+  }
 }
 
 export const audioNotifier = new AudioNotifier();
